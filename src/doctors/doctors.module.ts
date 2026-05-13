@@ -6,13 +6,16 @@ import { Doctor } from './doctors.entity';
 import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Patient } from '../patient/patient.entity';
+import { AuthRolesGuard } from '../Auth/guards/auth.roles.guard';
+import { Users } from '../users/users.entity';
+import { AuthGuard } from 'src/Auth/guards/auth.guard';
+import { Appointment } from 'src/appointment/appointment.entity';
+import { UserModule } from 'src/users/users.module';
 
 @Module({
   controllers: [DoctorsController],
-  providers: [DoctorsService, RolesGuard],
-  imports: [TypeOrmModule.forFeature([Doctor, Patient]),
+  providers: [DoctorsService],
+  imports: [TypeOrmModule.forFeature([Doctor, Users, Appointment] ,  ),
   JwtModule.registerAsync({
     imports: [ConfigModule],
     inject: [ConfigService],
@@ -22,6 +25,7 @@ import { Patient } from '../patient/patient.entity';
         expiresIn: config.get<string>('JWT_EXPIRES_IN') as any,
       },
     }),
-  }), CloudinaryModule],
+  }), CloudinaryModule , ConfigModule , UserModule],
+  exports: [DoctorsService],
 })
 export class DoctorsModule { }

@@ -20,15 +20,9 @@ export class DoctorsService {
    * @param file file for the image 
    * @returns the new doctor added
    */
-  public async addDoctor(dto: CreateDoctorDto, file: Express.Multer.File) {
 
-    // sure email is exist or not
-    const existing = await this.doctorRepository.findOne({
-      where: { email: dto.email }
-    });
-    if (existing) {
-      throw new BadRequestException("doctor aleardy exist");
-    };
+
+  public async addDoctor(dto: CreateDoctorDto, file: Express.Multer.File) {
 
     // upload image in cloadinary
     let imageUrl: string;
@@ -36,49 +30,32 @@ export class DoctorsService {
       const uploadResult = await this.cloudinary.uploadFile(file);
       imageUrl = uploadResult.secure_url;
     } catch (error) {
-      throw new BadRequestException('faild to upload image' + error.message);
+      throw new BadRequestException('faild to upload image');
     }
 
-    // hased password
-    const hashedPassword = await this.hashPassword(dto.password);
-
-    const newDoctor: any = this.doctorRepository.create({
+    const newDoctor = this.doctorRepository.create({
       ...dto,
-      password: hashedPassword,
       imageUrl: imageUrl
     })
-    return await this.doctorRepository.save(newDoctor)
+    await this.doctorRepository.save(newDoctor)
+    return { message: "Doctor added successfuly", newDoctor }
   }
 
 
-
+  /**
+   * Get all doctors from the database
+   * @returns collection of doctors
+   */
   public async getAllDoctors() {
-    const doctors = await this.doctorRepository.find({
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        speciality: true,
-        degree: true,
-        experience: true,
-        about: true,
-        available: true,
-        fees: true,
-        imageUrl: true,
-        address: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-
+    const doctors = await this.doctorRepository.find();
     return { success: true, doctors };
   }
 
-/**
-* Hashing Password
-* @param password plain text password
-* @returns hashing password
-*/
+  /**
+  * Hashing Password
+  * @param password plain text password
+  * @returns hashing password
+  */
   public async hashPassword(password: string): Promise<string> {
     const salt = await bcrypt.genSalt(10);
     return bcrypt.hash(password, salt);

@@ -4,9 +4,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Doctor } from './doctors/doctors.entity';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { DoctorsModule } from './doctors/doctors.module';
-import { AdminModule } from './admin/admin.module';
-import { PatientModule } from './patient/patient.module';
-import { Patient } from './patient/patient.entity';
+import { UserModule } from './users/users.module';
+import { Users } from './users/users.entity';
+import { AppointmentModule } from './appointment/appointment.module';
+import { Appointment } from './appointment/appointment.entity';
 
 
 
@@ -24,14 +25,14 @@ import { Patient } from './patient/patient.entity';
           port: config.get<number>("DB_PORT"),
           host: 'localhost',
           synchronize: process.env.NODE_ENV !== 'prodcution',
-          entities: [Doctor, Patient]
+          entities: [Doctor, Users, Appointment]
         }
       }
     }),
     ConfigModule.forRoot({ isGlobal: true, envFilePath: `.env.${process.env.NODE_ENV}` }),
     CloudinaryModule,
-    AdminModule,
-    PatientModule,
+    UserModule,
+    AppointmentModule,
 
   ],
 })

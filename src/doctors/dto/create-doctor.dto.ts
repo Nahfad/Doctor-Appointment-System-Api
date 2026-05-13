@@ -2,16 +2,6 @@ import { IsBoolean, IsDate, IsDateString, IsEmail, IsEnum, IsNotEmpty, IsNumber,
 import { Transform, Type } from 'class-transformer';
 
 
-class AddressDto {
-    @IsString()
-    @IsNotEmpty()
-    line1: string;
-
-    @IsString()
-    @IsNotEmpty()
-    line2: string;
-
-}
 
 
 export class CreateDoctorDto {
@@ -19,25 +9,13 @@ export class CreateDoctorDto {
     @IsNotEmpty()
     name: string;
 
-    @IsEmail()
-    @IsNotEmpty()
-    email: string;
-
-    @IsString()
-    @IsNotEmpty()
-    password: string;
-
     @IsString()
     @IsNotEmpty()
     speciality: string;
 
-    @IsString()
+    @IsNumber()
     @IsNotEmpty()
-    degree: string;
-
-    @IsString()
-    @IsNotEmpty()
-    experience: string;
+    experienceYears: number;
 
     @IsString()
     @IsNotEmpty()
@@ -49,8 +27,6 @@ export class CreateDoctorDto {
     @Type(() => Number)
     fees: number;
 
-    @IsObject()
-    @Transform(({ value }) => typeof value === 'string' ? JSON.parse(value) : value)
-    address: object;
+
 
 }

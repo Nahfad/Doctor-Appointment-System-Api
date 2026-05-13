@@ -1,5 +1,8 @@
-import { CURRENT_TIMESTAMP } from "src/utils/constans";
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Appointment } from "src/appointment/appointment.entity";
+import { CURRENT_TIMESTAMP } from "src/utils/constants";
+import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+
+
 
 
 @Entity({ name: 'Doctors' })
@@ -10,12 +13,6 @@ export class Doctor {
     @Column()
     name: string;
 
-    @Column({ unique: true })
-    email: string;
-
-    @Column()
-    password: string;
-
     @Column({ nullable: true })
     imageUrl: string;
 
@@ -23,29 +20,28 @@ export class Doctor {
     speciality: string;
 
     @Column()
-    degree: string;
-
-    @Column()
-    experience: string;
+    experienceYears: number;
 
     @Column()
     about: string;
 
-    @Column({ default: true })
-    available: boolean;
-
     @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
     fees: number;
 
-    @Column('simple-json', { nullable: true })
-    address: object
-
-    @Column({ type: 'simple-json', default: {} })
-    slotsBooked: object;
+    @Column({ type: 'jsonb', default: {} })
+    slots_booked: {
+        [date: string]: string[]; // { "2024-03-15": ["10:00 AM", "2:00 PM"] }
+    };
 
     @CreateDateColumn({ type: 'timestamp', default: () => CURRENT_TIMESTAMP })
     createdAt: Date;
 
     @UpdateDateColumn({ type: 'timestamp', default: () => CURRENT_TIMESTAMP, onUpdate: CURRENT_TIMESTAMP })
     updatedAt: Date;
+
+    // الدكتور الواحد لدية اكثر من معاد
+    @OneToMany(() => Appointment, (appointment) => appointment.doctor)
+    appointments: Appointment[];
+
+
 }
