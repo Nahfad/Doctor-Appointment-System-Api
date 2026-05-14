@@ -8,6 +8,8 @@ import {
   Query,
   Request,
   UseGuards,
+  Delete,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { AppointmentService } from './appointment.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
@@ -15,78 +17,58 @@ import { AuthRolesGuard } from '../Auth/guards/auth.roles.guard';
 import { UserType } from '../utils/enums';
 import { Roles } from 'src/Auth/guards/decorators/user-role.decorator';
 import { CurrentUser } from 'src/Auth/guards/decorators/current-user.decorator';
+import { dot } from 'node:test/reporters';
+import { JWTPayloadType } from 'src/utils/types';
 
 @Controller('api/appointments')
 export class AppointmentController {
   constructor(private readonly appointmentService: AppointmentService) { }
 
-  // POST /api/appointments/book - Book appointment (Patient only)
+  // POST /api/appointments - Book appointment (Patient only)
   @UseGuards(AuthRolesGuard)
   @Roles(UserType.User)
-  @Post('book')
-  public bookAppointment(@Body() createAppointmentDto: CreateAppointmentDto) {
-
+  @Post()
+  public createAppointment(@Body() dto: CreateAppointmentDto, @CurrentUser() payload: JWTPayloadType) {
+    return this.appointmentService.createAppointment(dto, payload.id)
   }
 
   // GET /api/appointments/all - Get all appointments (Admin only)
-  // @Roles(UserType.ADMIN)
-  // @Get('all')
-  // async getAllAppointments() {
-  // }
+  @UseGuards(AuthRolesGuard)
+  @Roles(UserType.ADMIN)
+  @Get('all')
+  async getAllAppointments(
+    @Query('pageNumber', ParseIntPipe) pageNumber: number,
+    @Query('appointmentPerPage', ParseIntPipe) appointmentPerPage: number
+
+  ) {
+    return this.appointmentService.getAllAppointments(pageNumber, appointmentPerPage)
+  }
 
   // GET /api/appointments/current-user - Get patient's appointments (Patient only)
   @Get('current-user')
   @Roles(UserType.User)
   @UseGuards(AuthRolesGuard)
-  public getMyAppointments(@CurrentUser() payload) {
-
+  public getMyAppointment(@CurrentUser() payload: JWTPayloadType) {
+    return this.appointmentService.getMyAppointment(payload.id)
   }
 
-  // GET /api/appointments/available-slots - Get available slots for a doctor
-  // Public or Patient can access
-  @Get('available-slots')
-  async getAvailableSlots(
-    @Query('doctorId') doctorId: string,
-    @Query('date') date: string,
-  ) {
-  }
-
-  // GET /api/appointments/doctor/:doctorId - Get doctor appointments (Admin only)
-  @Roles(UserType.ADMIN)
-  @Get('doctor/:doctorId')
-  async getDoctorAppointments(@Param('doctorId') doctorId: string) {
-  }
-
-  // GET /api/appointments/stats - Get statistics (Admin only)
-  @Roles(UserType.ADMIN)
-  @Get('stats')
-  async getStatistics() {
-  }
-
-  // GET /api/appointments/:id - Get single appointment (Admin & Patient)
-  @Roles(UserType.ADMIN, UserType.User)
+  // GET : ~ /api/appointments/:id  -  Get a single appointments by its ID
   @Get(':id')
-  async getAppointmentById(@Param('id') id: string) {
+  public getAppointmentBy(@Param('id', ParseIntPipe) id: number) {
+    return this.appointmentService.getAppointmentBy(id);
   }
 
-  // PATCH /api/appointments/:id/cancel - Cancel appointment (Admin & Patient)
+
+  // Delete /api/appointments/:id - delate appointments private (Admin and patinet)
+  @Delete(':id')
   @Roles(UserType.ADMIN, UserType.User)
-  @Patch(':id/cancel')
-  async cancelAppointment(@Param('id') id: string) {
-  }
-
-  // PATCH /api/appointments/:id/complete - Complete appointment (Admin only)
-  @Roles(UserType.ADMIN)
-  @Patch(':id/complete')
-  async completeAppointment(@Param('id') id: string) {
-  }
-
-  // PATCH /api/appointments/:id/payment - Update payment status (Admin only)
-  @Roles(UserType.ADMIN)
-  @Patch(':id/payment')
-  async updatePaymentStatus(
-    @Param('id') id: string,
-    @Body() body: { paid: boolean },
+  @UseGuards(AuthRolesGuard)
+  public async deleteAppointment(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() payload: JWTPayloadType
   ) {
+    return this.appointmentService.deleteAppointment(id, payload);
   }
+
+
 }

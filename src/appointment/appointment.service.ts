@@ -10,6 +10,8 @@ import { Appointment } from './appointment.entity';
 import { Doctor } from '../doctors/doctors.entity';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UsersService } from 'src/users/users.service';
+import { UserType } from 'src/utils/enums';
+import { JWTPayloadType } from 'src/utils/types';
 
 @Injectable()
 export class AppointmentService {
@@ -18,11 +20,121 @@ export class AppointmentService {
     private readonly appointmentRepository: Repository<Appointment>,
     @InjectRepository(Doctor)
     private readonly doctorRepository: Repository<Doctor>,
-    private readonly patientService: UsersService
-
+    private readonly usersService: UsersService,
   ) { }
 
+  /**
+   * Api for adding Appointment
+   * @param dto the data for the Appointment
+   * @returns the new Appointment 
+   */
+  public async createAppointment(
+    dto: CreateAppointmentDto,
+    userId: number,
+  ) {
+
+    const user = await this.usersService.getCurrentUser(userId);
+
+    const doctor = await this.doctorRepository.findOne({
+      where: { id: dto.doctorId },
+    });
+
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found');
+    }
+
+    const appointment = this.appointmentRepository.create({
+      reason: dto.reason,
+      date: dto.date,
+      user,
+      doctor,
+    });
+
+    return this.appointmentRepository.save(appointment);
+  }
+
+  /**
+   * Get All Appointments
+   * @param pageNumber number of the current page
+   * @param appointmentsPerPage data per page 
+   * @returns collection of appointments
+  */
+  public async getAllAppointments(pageNumber: number, appointmentPerPage: number) {
+    return this.appointmentRepository.find({
+      skip: appointmentPerPage * (pageNumber - 1),
+      take: appointmentPerPage,
+      order: { createdAt: 'DESC' }
+    });
+  }
+
+  /**
+   * Api for getting all appointments for the current patient
+   * @param userId the current authenticated user id
+   * @returns list of patient appointments
+   */
+  public async getMyAppointment(id: number) {
+    const appointments = await this.appointmentRepository.find({
+      where: {
+        user: {
+          id,
+        },
+      },
+      relations: ['doctor'],
+    });
+
+    if (!appointments.length) {
+      throw new NotFoundException('No appointments found');
+    }
+
+    return appointments;
+  }
+
+  /**
+   * @param AppointmentId id for the Appointment
+   * @param payload JWTPayload
+   * @returns message to sucess deleted
+  */
+  public async deleteAppointment(id: number, payload: JWTPayloadType) {
+    const appointment = await this.getAppointmentBy(id);
+    if (appointment.user.id === payload.id || payload.userType === UserType.ADMIN) {
+      await this.appointmentRepository.remove(appointment);
+      return {
+        message: 'Appointment has been deleted',
+      };
+    }
+    throw new ForbiddenException(
+      'access denied , you are not allowed',
+    );
+  }
+
+  /**
+   * Get single Appointment by id
+   * @param id id for the Appointment
+   * @returns Appointment from the database
+  */
+  public async getAppointmentBy(id: number) {
+    const appointment = await this.appointmentRepository.findOne({
+      where: { id },
+      relations: {
+        user: true,
+        doctor: true,
+      },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException(
+        'Appointment not found',
+      );
+    }
+
+    return appointment;
+  }
+
+
+
   // Book a new appointment with slot availability check
+
+
   // async bookAppointment(
   //   createAppointmentDto: CreateAppointmentDto) {
   //   const { docId, slotDate, slotTime } = createAppointmentDto;

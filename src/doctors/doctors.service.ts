@@ -20,10 +20,7 @@ export class DoctorsService {
    * @param file file for the image 
    * @returns the new doctor added
    */
-
-
   public async addDoctor(dto: CreateDoctorDto, file: Express.Multer.File) {
-
     // upload image in cloadinary
     let imageUrl: string;
     try {
@@ -51,12 +48,24 @@ export class DoctorsService {
     return { success: true, doctors };
   }
 
+
+  /**
+ * Get all doctors from the database
+ * @returns collection of doctors
+ */
+  public async getDoctor(id: number) {
+    const doctor = await this.doctorRepository.findOne({ where: { id } });
+    if (!doctor) throw new NotFoundException("Doctor not found");
+    return { success: true, doctor };
+  }
+
+
   /**
   * Hashing Password
   * @param password plain text password
   * @returns hashing password
   */
-  public async hashPassword(password: string): Promise<string> {
+  public async hashPassword(password: string) {
     const salt = await bcrypt.genSalt(10);
     return bcrypt.hash(password, salt);
   }

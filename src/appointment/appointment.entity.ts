@@ -21,8 +21,8 @@ export class Appointment {
     @Column({ type: 'text', nullable: true })
     reason: string;
 
-    @Column()
-    date : Date 
+    @Column({ type: 'timestamp' })
+    date: Date;
 
     @CreateDateColumn({ type: 'timestamp', default: () => CURRENT_TIMESTAMP })
     createdAt: Date;

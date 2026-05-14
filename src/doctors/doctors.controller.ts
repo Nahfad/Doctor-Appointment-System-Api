@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, UploadedFile, UseGuards, ParseIntPipe } from '@nestjs/common';
 import { DoctorsService } from './doctors.service';
 import { CreateDoctorDto } from './dto/create-doctor.dto';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
@@ -14,22 +14,29 @@ export class DoctorsController {
     private readonly cloudinaryService: CloudinaryService
   ) { }
 
-  // POST : ~/api/doctor/add-doctor (Private - Only Admin)
-  @Post("add-doctor")
+  // POST : ~/api/doctors (Private - Only Admin)
+  @Post()
   @Roles(UserType.ADMIN)
   @UseGuards(AuthRolesGuard)
   @UseInterceptors(FileInterceptor('file'))
   create(
     @UploadedFile() file: Express.Multer.File,
     @Body() body: CreateDoctorDto
-  ): Promise<any> {
+  ) {
     return this.doctorsService.addDoctor(body, file);
   }
 
-  // GET /api/doctors/all-doctors (Public)
-  @Get('all-doctors')
+  // GET /api/doctors   (Public)
+  @Get()
   async getAllDoctors() {
     return this.doctorsService.getAllDoctors();
   }
+
+  // GET /api/doctors/:id (Public)
+  @Get(':id')
+  async getDoctor(@Param('id', ParseIntPipe) id: number) {
+    return this.doctorsService.getDoctor(id);
+  }
+
 
 }
