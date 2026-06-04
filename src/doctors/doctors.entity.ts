@@ -1,5 +1,6 @@
 import { Appointment } from "src/appointment/appointment.entity";
 import { CURRENT_TIMESTAMP } from "src/utils/constants";
+import { DoctorSpeciality } from "src/utils/enums";
 import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 
@@ -16,8 +17,8 @@ export class Doctor {
     @Column({ nullable: true })
     imageUrl: string;
 
-    @Column()
-    speciality: string;
+    @Column({ type: 'enum', enum: DoctorSpeciality })
+    speciality: DoctorSpeciality
 
     @Column()
     experienceYears: number;

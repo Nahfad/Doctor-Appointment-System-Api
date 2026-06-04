@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { AppointmentService } from './appointment.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
+import { UpdateAppointmentStatusDto } from './dto/update-appointment.dto';
 import { AuthRolesGuard } from '../Auth/guards/auth.roles.guard';
 import { UserType } from '../utils/enums';
 import { Roles } from 'src/Auth/guards/decorators/user-role.decorator';
@@ -44,7 +45,23 @@ export class AppointmentController {
     return this.appointmentService.getAllAppointments(pageNumber, appointmentPerPage)
   }
 
-  // GET /api/appointments/current-user - Get patient's appointments (Patient only)
+  // GET /api/appointments/stats  (Admin only)
+  @Get('/stats')
+  @Roles(UserType.ADMIN)
+  @UseGuards(AuthRolesGuard)
+  public getStats() {
+    return this.appointmentService.getStats();
+  }
+
+  // GET /api/appointments/latest  (Admin only)
+  @Get('/latest')
+  @Roles(UserType.ADMIN)
+  @UseGuards(AuthRolesGuard)
+  public getLatestAppointments() {
+    return this.appointmentService.getLatestAppointments();
+  }
+
+  // GET /api/appointments/current-user - Get patient's appointments (Patient only) 
   @Get('current-user')
   @Roles(UserType.User)
   @UseGuards(AuthRolesGuard)
@@ -58,6 +75,17 @@ export class AppointmentController {
     return this.appointmentService.getAppointmentBy(id);
   }
 
+
+  // PATCH /api/appointments/:id/status - Update appointment status (Admin only)
+  @Patch(':id/status')
+  @Roles(UserType.ADMIN)
+  @UseGuards(AuthRolesGuard)
+  public updateStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateAppointmentStatusDto,
+  ) {
+    return this.appointmentService.updateStatus(id, dto.status);
+  }
 
   // Delete /api/appointments/:id - delate appointments private (Admin and patinet)
   @Delete(':id')

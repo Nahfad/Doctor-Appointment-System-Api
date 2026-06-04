@@ -1,4 +1,9 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateAppointmentDto } from './create-appointment.dto';
+import { IsEnum } from 'class-validator';
+import { AppointmentStatus } from 'src/utils/enums';
 
-export class UpdateAppointmentDto extends PartialType(CreateAppointmentDto) {}
+export class UpdateAppointmentStatusDto {
+    @IsEnum(AppointmentStatus, {
+        message: `status must be one of: pending, confirmed, cancelled, completed`,
+    })
+    status: AppointmentStatus;
+}

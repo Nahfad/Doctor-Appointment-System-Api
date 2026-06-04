@@ -8,7 +8,8 @@ import { UserModule } from './users/users.module';
 import { Users } from './users/users.entity';
 import { AppointmentModule } from './appointment/appointment.module';
 import { Appointment } from './appointment/appointment.entity';
-
+import { PatientModule } from './patient/patient.module';
+import { SeedModule } from './seed/seed.module';
 
 
 @Module({
@@ -33,6 +34,8 @@ import { Appointment } from './appointment/appointment.entity';
     CloudinaryModule,
     UserModule,
     AppointmentModule,
+    PatientModule,
+    SeedModule,
 
   ],
 })

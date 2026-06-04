@@ -1,18 +1,22 @@
-import { IsEnum, IsInt, IsOptional, IsString, Matches, Max, Min, MaxLength, MinLength } from 'class-validator';
+import {
+    IsEnum, IsInt, IsOptional,
+    IsString, Length, Max, Min, Matches,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { Gender } from 'src/utils/enums';
 
-export class UpdateUsertDto {
+export class UpdatePatientDto {
 
     @IsOptional()
     @IsString()
-    @MinLength(3)
-    @MaxLength(100)
+    @Length(3, 100)
     name?: string;
 
     @IsOptional()
     @IsString()
-    @Matches(/^[0-9+\-\s()]{7,20}$/, { message: 'phone must be a valid phone number' })
+    @Matches(/^(\+20|0)?1[0125]\d{8}$/, {
+        message: 'phone must be a valid Egyptian phone number',
+    })
     phone?: string;
 
     @IsOptional()
@@ -28,11 +32,11 @@ export class UpdateUsertDto {
 
     @IsOptional()
     @IsString()
-    @MaxLength(500)
+    @Length(0, 500)
     address?: string;
 
     @IsOptional()
     @IsString()
-    @MaxLength(1000)
+    @Length(0, 1000)
     notes?: string;
 }
