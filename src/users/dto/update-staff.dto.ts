@@ -1,4 +1,9 @@
-import { IsOptional, IsString, Length, Matches } from 'class-validator';
+import {
+    IsEnum, IsInt, IsOptional,
+    IsString, Length, Matches, Min, Max,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { DoctorSpeciality } from 'src/utils/enums';
 
 export class UpdateStaffDto {
 
@@ -14,7 +19,25 @@ export class UpdateStaffDto {
     })
     phone?: string;
 
+    // Doctor only
+    @IsOptional()
+    @IsEnum(DoctorSpeciality)
+    speciality?: DoctorSpeciality;
+
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    @Max(60)
+    @Type(() => Number)
+    experienceYears?: number;
+
+    @IsOptional()
+    @Type(() => Number)
+    @Min(0)
+    fees?: number;
+
     @IsOptional()
     @IsString()
-    specialization?: string;
+    @Length(0, 500)
+    about?: string;
 }

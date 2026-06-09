@@ -5,6 +5,7 @@ import {
 } from 'typeorm';
 import { Gender } from 'src/utils/enums';
 import { CURRENT_TIMESTAMP } from 'src/utils/constants';
+import { Appointment } from 'src/appointment/appointment.entity';
 
 @Entity('patients')
 export class Patient {
@@ -40,9 +41,13 @@ export class Patient {
     @DeleteDateColumn()
     deletedAt: Date;
 
-    @OneToMany('Appointment', 'patient')
-    appointments: any[];
+    // مريض واحد يمكن أن يكون لديه مواعيد كثيرة.
+    @OneToMany(() => Appointment, (appointment) => appointment.patient)
+    appointments: Appointment[];
 
-    @OneToMany('Visit', 'patient')
-    visits: any[];
+    // @OneToMany(
+    //     () => Visit,
+    //     (visit) => visit.patient,
+    // )
+    // visits: Visit[];
 }

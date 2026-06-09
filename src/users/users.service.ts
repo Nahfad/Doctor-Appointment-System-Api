@@ -13,7 +13,7 @@ import { LoginUserDto } from './dto/login-user.dto';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
 import { JWTPayloadType } from 'src/utils/types';
-import { UserType, UserStatus } from 'src/utils/enums';
+import { UserType, UserStatus, DoctorSpeciality } from 'src/utils/enums';
 
 @Injectable()
 export class UsersService {
@@ -25,107 +25,94 @@ export class UsersService {
     private readonly cloudinary: CloudinaryService,
   ) { }
 
-  // ─────────────────────────────────────────────
-  //  Auth
-  // ─────────────────────────────────────────────
+  // ─── Auth ──────────────────────────────────────────────
 
-
-  /**
-   * Login for all roles — checks status before issuing token
-   * @param dto data for the user
-   * @returns JWT 
-   */
   public async login(dto: LoginUserDto) {
     const user = await this.userRepository.findOne({
       where: { email: dto.email },
       select: ['id', 'name', 'email', 'password', 'userType', 'status'],
     });
-
     if (!user) throw new BadRequestException('Invalid email or password');
 
     const isMatch = await bcrypt.compare(dto.password, user.password);
     if (!isMatch) throw new BadRequestException('Invalid email or password');
 
-    // Check that the account is active
     if (user.status === UserStatus.INACTIVE) {
       throw new ForbiddenException('Your account has been deactivated. Contact the admin.');
     }
 
     const token = await this.generateJWT({ id: user.id, userType: user.userType });
-    return {
-      success: true,
-      token,
-      user: { id: user.id, name: user.name, role: user.userType },
-    };
+    return { success: true, token, user: { id: user.id, name: user.name, role: user.userType } };
   }
 
-  // ─────────────────────────────────────────────
-  //  User Management (Admin only)
-  // ─────────────────────────────────────────────
+  // ─── User Management (Admin only) ─────────────────────
 
-  /**
-   * Create Doctor or Receptionist account (Admin only)
-   */
-  public async createStaff(dto: CreateStaffDto) {
+  public async createStaff(dto: CreateStaffDto, file?: Express.Multer.File) {
+
+    // لو دكتور، التخصص إلزامي
+    if (dto.userType === UserType.DOCTOR && !dto.speciality) {
+      throw new BadRequestException('Speciality is required for doctors');
+    }
 
     const exists = await this.userRepository.findOne({ where: { email: dto.email } });
     if (exists) throw new BadRequestException('Email already registered');
 
-    const hashedPassword = await this.hashPassword(dto.password);
+    let imageUrl: string | null = null;
+    if (file) {
+      const result = await this.cloudinary.uploadFile(file);
+      imageUrl = result.secure_url;
+    }
+
     const staff = this.userRepository.create({
       ...dto,
-      password: hashedPassword,
+      password: await this.hashPassword(dto.password),
       status: UserStatus.ACTIVE,
+      imageUrl,
     });
     await this.userRepository.save(staff);
 
     return {
       success: true,
-      message: `${dto.userType} account created successfully`,
+      message: `${dto.userType} created successfully`,
       user: { id: staff.id, name: staff.name, email: staff.email, role: staff.userType },
     };
   }
 
-  /**
-   * Get all users with filters (Admin only)
-   */
   public async getAllUsers(
     role?: UserType,
     status?: UserStatus,
+    speciality?: DoctorSpeciality,
     page: number = 1,
     limit: number = 10,
   ) {
     const where: any = {};
     if (role) where.userType = role;
     if (status) where.status = status;
+    if (speciality) where.speciality = speciality;
 
     const [users, total] = await this.userRepository.findAndCount({
       where,
       order: { createdAt: 'DESC' },
       skip: limit * (page - 1),
       take: limit,
-      select: ['id', 'name', 'email', 'phone', 'userType', 'status', 'specialization', 'imageUrl', 'createdAt'],
+      select: ['id', 'name', 'email', 'phone', 'userType', 'status',
+        'speciality', 'experienceYears', 'fees', 'about', 'imageUrl', 'createdAt'],
     });
 
     return { total, page, limit, totalPages: Math.ceil(total / limit), users };
   }
 
-  /**
-   * Get single user by id (Admin only)
-   */
   public async getUserById(id: number) {
     const user = await this.userRepository.findOne({
       where: { id },
-      select: ['id', 'name', 'email', 'phone', 'userType', 'status', 'specialization', 'imageUrl', 'createdAt'],
+      select: ['id', 'name', 'email', 'phone', 'userType', 'status',
+        'speciality', 'experienceYears', 'fees', 'about', 'imageUrl', 'createdAt'],
     });
     if (!user) throw new NotFoundException('User not found');
     return user;
   }
 
-  /**
-   * Update user data by Admin
-   */
-  public async updateStaff(id: number, dto: UpdateStaffDto) {
+  public async updateStaff(id: number, dto: UpdateStaffDto, file?: Express.Multer.File) {
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
 
@@ -133,20 +120,18 @@ export class UsersService {
       throw new ForbiddenException('Cannot edit admin account');
     }
 
+    if (file) {
+      const result = await this.cloudinary.uploadFile(file);
+      user.imageUrl = result.secure_url;
+    }
+
     Object.assign(user, dto);
     await this.userRepository.save(user);
-
     return { success: true, message: 'User updated successfully', user };
   }
 
-  /**
-   * Toggle user status Active ↔ Inactive (Admin only)
-   * Deactivated users cannot login
-   */
   public async toggleStatus(id: number, adminId: number) {
-    if (id === adminId) {
-      throw new ForbiddenException('You cannot deactivate your own account');
-    }
+    if (id === adminId) throw new ForbiddenException('You cannot deactivate your own account');
 
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
@@ -165,44 +150,41 @@ export class UsersService {
     };
   }
 
-  /**
-   * Delete user (Admin only) — preserves visits and prescriptions
-   */
+
   public async deleteUser(id: number, adminId: number) {
-    if (id === adminId) {
-      throw new ForbiddenException('You cannot delete your own account');
-    }
+    if (id === adminId) throw new ForbiddenException('You cannot delete your own account');
 
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
-
-    if (user.userType === UserType.ADMIN) {
-      throw new ForbiddenException('Cannot delete another admin');
-    }
+    if (user.userType === UserType.ADMIN) throw new ForbiddenException('Cannot delete another admin');
 
     await this.userRepository.remove(user);
     return { success: true, message: 'User deleted successfully' };
   }
 
-  // ─────────────────────────────────────────────
-  //  Profile (own)
-  // ─────────────────────────────────────────────
+  // ─── Doctors ───────────────────────────────────────────
 
-  /**
-   * Get current logged-in user profile
-   */
+  public getSpecialities() {
+    return {
+      total: Object.keys(DoctorSpeciality).length,
+      specialities: Object.entries(DoctorSpeciality).map(([key, value]) => ({
+        key, label: value,
+      })),
+    };
+  }
+
+  // ─── Profile (own) ─────────────────────────────────────
+
   public async getMe(id: number) {
     const user = await this.userRepository.findOne({
       where: { id },
-      select: ['id', 'name', 'email', 'phone', 'userType', 'status', 'specialization', 'imageUrl', 'createdAt'],
+      select: ['id', 'name', 'email', 'phone', 'userType', 'status',
+        'speciality', 'experienceYears', 'fees', 'about', 'imageUrl', 'createdAt'],
     });
     if (!user) throw new NotFoundException('User not found');
     return user;
   }
 
-  /**
-   * Update own profile (name, phone, specialization, photo)
-   */
   public async updateProfile(id: number, dto: UpdateStaffDto, file?: Express.Multer.File) {
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
@@ -218,10 +200,7 @@ export class UsersService {
   }
 
 
-
-  // ─────────────────────────────────────────────
-  //  Helpers
-  // ─────────────────────────────────────────────
+  // ─── Helpers ───────────────────────────────────────────
 
   public async getCurrentUser(id: number) {
     const user = await this.userRepository.findOne({ where: { id } });

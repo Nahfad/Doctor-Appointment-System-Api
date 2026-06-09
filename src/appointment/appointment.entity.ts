@@ -1,4 +1,4 @@
-import { Doctor } from 'src/doctors/doctors.entity';
+import { Patient } from 'src/patient/patient.entity';
 import { Users } from 'src/users/users.entity';
 import { CURRENT_TIMESTAMP } from 'src/utils/constants';
 import { AppointmentStatus } from 'src/utils/enums';
@@ -9,15 +9,13 @@ import {
     CreateDateColumn,
     UpdateDateColumn,
     ManyToOne,
+    JoinColumn,
 } from 'typeorm';
 
 @Entity('appointments')
 export class Appointment {
     @PrimaryGeneratedColumn()
     id: number;
-
-    @Column({ type: 'text', nullable: true })
-    reason: string;
 
     // التاريخ: "2025-06-20"
     @Column({ type: 'date' })
@@ -41,9 +39,20 @@ export class Appointment {
     @UpdateDateColumn({ type: 'timestamp', default: () => CURRENT_TIMESTAMP, onUpdate: CURRENT_TIMESTAMP })
     updatedAt: Date;
 
-    @ManyToOne(() => Users, (user) => user.appointments, { onDelete: 'CASCADE' })
-    user: Users;
+    // المريض
+    @ManyToOne(() => Patient, (patient) => patient.appointments, { onDelete: 'CASCADE' })
+    patient: Patient;
 
-    @ManyToOne(() => Doctor, (doctor) => doctor.appointments, { onDelete: 'CASCADE' })
-    doctor: Doctor;
+    // الدكتور (User بـ role doctor)
+    @ManyToOne(() => Users, { onDelete: 'SET NULL', nullable: true, eager: false })
+    @JoinColumn({ name: 'doctorId' })
+    doctor: Users;
+
+    // الاستقبال أو الادمن اللي عمل الحجز
+    @ManyToOne(() => Users, { onDelete: 'SET NULL', nullable: true, eager: false })
+    @JoinColumn({ name: 'createdById' })
+    createdBy: Users;
+
+
+
 }

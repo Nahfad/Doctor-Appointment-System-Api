@@ -13,7 +13,7 @@ import { UserType, Gender } from 'src/utils/enums';
 @Controller('api/patients')
 @UseGuards(AuthRolesGuard)
 export class PatientController {
-  constructor(private readonly patientService: PatientService) {}
+  constructor(private readonly patientService: PatientService) { }
 
   // POST /api/patients  (Admin & Receptionist)
   @Post()
@@ -22,13 +22,13 @@ export class PatientController {
     return this.patientService.createPatient(dto);
   }
 
-  // GET /api/patients?search=&gender=&sortBy=name&order=ASC&page=1&limit=10  (All roles)
+  // GET /api/patients  (All roles)
   @Get()
   @Roles(UserType.ADMIN, UserType.DOCTOR, UserType.RECEPTIONIST)
   public getAllPatients(
     @Query('search') search?: string,
     @Query('gender') gender?: Gender,
-    @Query('sortBy') sortBy: 'name' | 'age' | 'createdAt' = 'createdAt',
+    @Query('sortBy') sortBy?: string,
     @Query('order') order: 'ASC' | 'DESC' = 'DESC',
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number = 10,

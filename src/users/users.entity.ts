@@ -1,18 +1,13 @@
-import { Appointment } from 'src/appointment/appointment.entity';
-import { CURRENT_TIMESTAMP } from 'src/utils/constants';
-import { Gender, UserStatus, UserType } from 'src/utils/enums';
 import {
-    Entity,
-    PrimaryGeneratedColumn,
-    Column,
-    CreateDateColumn,
-    UpdateDateColumn,
-    OneToMany,
+    Entity, PrimaryGeneratedColumn, Column,
+    CreateDateColumn, UpdateDateColumn,
 } from 'typeorm';
-
+import { UserType, UserStatus, DoctorSpeciality } from 'src/utils/enums';
+import { CURRENT_TIMESTAMP } from 'src/utils/constants';
 
 @Entity('users')
 export class Users {
+
     @PrimaryGeneratedColumn()
     id: number;
 
@@ -31,16 +26,21 @@ export class Users {
     @Column({ type: 'enum', enum: UserType })
     userType: UserType;
 
-    @Column({
-        type: 'enum',
-        enum: UserStatus,
-        default: UserStatus.ACTIVE,
-    })
+    @Column({ type: 'enum', enum: UserStatus, default: UserStatus.ACTIVE })
     status: UserStatus;
 
-    // for doctor
-    @Column({ type: 'varchar', nullable: true })
-    specialization: string;
+    // Doctor only fields
+    @Column({ type: 'enum', enum: DoctorSpeciality, nullable: true })
+    speciality: DoctorSpeciality;
+
+    @Column({ type: 'int', nullable: true })
+    experienceYears: number;
+
+    @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+    fees: number;
+
+    @Column({ type: 'text', nullable: true })
+    about: string;
 
     @Column({ type: 'varchar', nullable: true })
     imageUrl: string;
@@ -50,9 +50,5 @@ export class Users {
 
     @UpdateDateColumn({ type: 'timestamp', default: () => CURRENT_TIMESTAMP, onUpdate: CURRENT_TIMESTAMP })
     updatedAt: Date;
-
-    // اليوزر الواحد يقدر يحجز اكثر من معاد
-    @OneToMany(() => Appointment, (appointment) => appointment.user)
-    appointments: Appointment[];
-
 }
+

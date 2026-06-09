@@ -1,20 +1,15 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { Doctor } from './doctors/doctors.entity';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
-import { DoctorsModule } from './doctors/doctors.module';
 import { UserModule } from './users/users.module';
-import { Users } from './users/users.entity';
 import { AppointmentModule } from './appointment/appointment.module';
-import { Appointment } from './appointment/appointment.entity';
 import { PatientModule } from './patient/patient.module';
 import { SeedModule } from './seed/seed.module';
 
 
 @Module({
   imports: [
-    DoctorsModule,
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
@@ -26,7 +21,7 @@ import { SeedModule } from './seed/seed.module';
           port: config.get<number>("DB_PORT"),
           host: 'localhost',
           synchronize: process.env.NODE_ENV !== 'prodcution',
-          entities: [Doctor, Users, Appointment]
+          autoLoadEntities: true,
         }
       }
     }),

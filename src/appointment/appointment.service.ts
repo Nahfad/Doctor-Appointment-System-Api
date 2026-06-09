@@ -1,16 +1,15 @@
 import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  ForbiddenException,
+  Injectable, NotFoundException,
+  BadRequestException, ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Appointment } from './appointment.entity';
-import { Doctor } from '../doctors/doctors.entity';
-import { Users } from '../users/users.entity';
+import { Patient } from 'src/patient/patient.entity';
+import { Users } from 'src/users/users.entity';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
-import { UsersService } from 'src/users/users.service';
+import { UpdateAppointmentStatusDto } from './dto/update-appointment-status.dto';
+import { RescheduleAppointmentDto } from './dto/reschedule-appointment.dto';
 import { AppointmentStatus, UserType } from 'src/utils/enums';
 import { JWTPayloadType } from 'src/utils/types';
 
@@ -18,226 +17,257 @@ import { JWTPayloadType } from 'src/utils/types';
 export class AppointmentService {
   constructor(
     @InjectRepository(Appointment)
-    private readonly appointmentRepository: Repository<Appointment>,
-    @InjectRepository(Doctor)
-    private readonly doctorRepository: Repository<Doctor>,
+    private readonly appointmentRepo: Repository<Appointment>,
+    @InjectRepository(Patient)
+    private readonly patientRepo: Repository<Patient>,
     @InjectRepository(Users)
-    private readonly userRepository: Repository<Users>,
-    private readonly usersService: UsersService,
+    private readonly userRepo: Repository<Users>,
   ) { }
 
+  // ─────────────────────────────────────────────
+  //  Dashboard
+  // ─────────────────────────────────────────────
 
   /**
-   * Api for adding Appointment
-   * @param dto the data for the Appointment
-   * @returns the new Appointment 
+   * Get dashboard overview stats
+   * @returns totals and appointment status breakdown
    */
-  public async createAppointment(dto: CreateAppointmentDto, userId: number) {
+  public async getStats() {
+    const today = new Date().toISOString().split('T')[0];
 
-    // 1. التحقق من أن التاريخ في المستقبل
-    const appointmentDateTime = new Date(`${dto.slotDate}T${dto.slotTime}:00`);
-    if (appointmentDateTime <= new Date()) {
+    const [
+      totalPatients, totalAppointments, todayAppointments,
+      pendingCount, confirmedCount, cancelledCount, completedCount,
+    ] = await Promise.all([
+      this.patientRepo.count(),
+      this.appointmentRepo.count(),
+      this.appointmentRepo.count({ where: { slotDate: today } }),
+      this.appointmentRepo.count({ where: { status: AppointmentStatus.PENDING } }),
+      this.appointmentRepo.count({ where: { status: AppointmentStatus.CONFIRMED } }),
+      this.appointmentRepo.count({ where: { status: AppointmentStatus.CANCELLED } }),
+      this.appointmentRepo.count({ where: { status: AppointmentStatus.COMPLETED } }),
+    ]);
+
+    return {
+      overview: { totalPatients, totalAppointments, todayAppointments },
+      appointmentsByStatus: {
+        pending: pendingCount, confirmed: confirmedCount,
+        cancelled: cancelledCount, completed: completedCount,
+      },
+    };
+  }
+
+  /**
+   * Get latest 5 appointments for dashboard
+   * @returns last 5 appointments with patient and doctor info
+   */
+  public async getLatestAppointments() {
+    return this.appointmentRepo.find({
+      order: { createdAt: 'DESC' },
+      take: 5,
+      relations: ['patient', 'doctor'],
+      select: {
+        id: true, slotDate: true, slotTime: true,
+        status: true, createdAt: true,
+        patient: { id: true, name: true, phone: true },
+        doctor: { id: true, name: true },
+      },
+    });
+  }
+
+  // ─────────────────────────────────────────────
+  //  CRUD
+  // ─────────────────────────────────────────────
+
+  /**
+   * Create new appointment (Receptionist & Admin)
+   * @param dto appointment data
+   * @param payload JWT payload of the user who created the appointment
+   */
+  public async createAppointment(dto: CreateAppointmentDto, payload: JWTPayloadType) {
+
+    // 1. التاريخ في المستقبل
+    if (new Date(`${dto.slotDate}T${dto.slotTime}:00`) <= new Date()) {
       throw new BadRequestException('Appointment date and time must be in the future');
     }
 
-    // 2. جلب الدكتور
-    const doctor = await this.doctorRepository.findOne({
-      where: { id: dto.doctorId },
+    // 2. المريض موجود
+    const patient = await this.patientRepo.findOne({ where: { id: dto.patientId } });
+    if (!patient) throw new NotFoundException('Patient not found');
+
+    // 3. الدكتور موجود وعنده role doctor
+    const doctor = await this.userRepo.findOne({
+      where: { id: dto.doctorId, userType: UserType.DOCTOR },
     });
     if (!doctor) throw new NotFoundException('Doctor not found');
 
-    // 3. منع الـ Double Booking — بس على المواعيد الفعّالة (مش الملغية)
-    const conflict = await this.appointmentRepository.findOne({
+    // 4. منع Double Booking
+    const conflict = await this.appointmentRepo.findOne({
       where: [
         { doctor: { id: dto.doctorId }, slotDate: dto.slotDate, slotTime: dto.slotTime, status: AppointmentStatus.PENDING },
         { doctor: { id: dto.doctorId }, slotDate: dto.slotDate, slotTime: dto.slotTime, status: AppointmentStatus.CONFIRMED },
       ],
     });
     if (conflict) {
-      throw new BadRequestException(
-        `The slot ${dto.slotTime} on ${dto.slotDate} is already booked. Please choose another time.`,
-      );
+      throw new BadRequestException(`Slot ${dto.slotTime} on ${dto.slotDate} is already booked`);
     }
 
-    // 4. تحديث slots_booked في الدكتور
-    if (!doctor.slots_booked) doctor.slots_booked = {};
-    if (!doctor.slots_booked[dto.slotDate]) doctor.slots_booked[dto.slotDate] = [];
+    // 5. نفس المريض مش عنده موعد مؤكد أو معلق في نفس التوقيت
+    const patientConflict = await this.appointmentRepo.findOne({
+      where: [
+        { patient: { id: dto.patientId }, slotDate: dto.slotDate, slotTime: dto.slotTime, status: AppointmentStatus.PENDING },
+        { patient: { id: dto.patientId }, slotDate: dto.slotDate, slotTime: dto.slotTime, status: AppointmentStatus.CONFIRMED },
+      ],
+    });
+    if (patientConflict) {
+      throw new BadRequestException('Patient already has an appointment at this time');
+    }
 
-    doctor.slots_booked[dto.slotDate].push(dto.slotTime);
-    await this.doctorRepository.save(doctor);
+    const createdBy = await this.userRepo.findOne({ where: { id: payload.id } });
 
-    // 5. إنشاء الموعد
-    const user = await this.usersService.getCurrentUser(userId);
-
-    const appointment = this.appointmentRepository.create({
-      reason: dto.reason,
+    const appointment = this.appointmentRepo.create({
       slotDate: dto.slotDate,
       slotTime: dto.slotTime,
       status: AppointmentStatus.PENDING,
-      user,
+      patient,
       doctor,
+      createdBy,
     });
 
-    return this.appointmentRepository.save(appointment);
+    return this.appointmentRepo.save(appointment);
   }
 
   /**
-   * Get All Appointments
-   * @param pageNumber number of the current page
-   * @param appointmentsPerPage data per page
-   * @returns collection of appointments
+   * Get all appointments with filters (Admin & Receptionist)
+   * Doctor gets only their own appointments
    */
-  public async getAllAppointments(pageNumber: number, appointmentPerPage: number) {
-    return this.appointmentRepository.find({
-      skip: appointmentPerPage * (pageNumber - 1),
-      take: appointmentPerPage,
-      order: { createdAt: 'DESC' },
-      relations: ['user', 'doctor'],
-    });
-  }
+  public async getAllAppointments(
+    payload: JWTPayloadType,
+    patientId?: number,
+    doctorId?: number,
+    status?: AppointmentStatus,
+    date?: string,
+    page: number = 1,
+    limit: number = 10,
+  ) {
+    const where: any = {};
 
-  /**
-   * Api for getting all appointments for the current patient
-   * @param userId the current authenticated user id
-   * @returns list of patient appointments or empty array
-   */
-  public async getMyAppointment(id: number) {
-    return this.appointmentRepository.find({
-      where: { user: { id } },
-      relations: ['doctor'],
+    // الدكتور يشوف مواعيده بس
+    if (payload.userType === UserType.DOCTOR) {
+      where.doctor = { id: payload.id };
+    } else {
+      if (doctorId) where.doctor = { id: doctorId };
+    }
+
+    if (patientId) where.patient = { id: patientId };
+    if (status) where.status = status;
+    if (date) where.slotDate = date;
+
+    const [appointments, total] = await this.appointmentRepo.findAndCount({
+      where,
       order: { slotDate: 'ASC', slotTime: 'ASC' },
+      relations: ['patient', 'doctor', 'createdBy'],
+      skip: limit * (page - 1),
+      take: limit,
     });
+
+    return { total, page, limit, totalPages: Math.ceil(total / limit), appointments };
   }
 
   /**
- * Get appointments statistics grouped by status
- * @returns appointments count by status
- */
-  public async getStats() {
-    const today = new Date().toISOString().split('T')[0];
-
-    const [
-      totalDoctors,
-      totalPatients,
-      totalAppointments,
-      todayAppointments,
-      pendingCount,
-      confirmedCount,
-      cancelledCount,
-      completedCount,
-    ] = await Promise.all([
-      this.doctorRepository.count(),
-      this.userRepository.count(),
-      this.appointmentRepository.count(),
-      this.appointmentRepository.count({ where: { slotDate: today } }),
-      this.appointmentRepository.count({ where: { status: AppointmentStatus.PENDING } }),
-      this.appointmentRepository.count({ where: { status: AppointmentStatus.CONFIRMED } }),
-      this.appointmentRepository.count({ where: { status: AppointmentStatus.CANCELLED } }),
-      this.appointmentRepository.count({ where: { status: AppointmentStatus.COMPLETED } }),
-    ]);
-
-    return {
-      overview: { totalDoctors, totalPatients, totalAppointments, todayAppointments },
-      appointmentsByStatus: {
-        pending: pendingCount,
-        confirmed: confirmedCount,
-        cancelled: cancelledCount,
-        completed: completedCount,
-      },
-    };
-  }
-
-  /**
-   * Get latest appointments from the database
-   * @returns collection of latest appointments
+   * Get single appointment by id
    */
-  public async getLatestAppointments() {
-    return this.appointmentRepository.find({
-      order: { createdAt: 'DESC' },
-      take: 5,
-      relations: ['user', 'doctor'],
-      select: {
-        id: true, slotDate: true, slotTime: true,
-        status: true, reason: true, createdAt: true,
-        user: { id: true, name: true },
-        doctor: { id: true, name: true, speciality: true },
-      },
+  public async getAppointmentById(id: number) {
+    const appointment = await this.appointmentRepo.findOne({
+      where: { id },
+      relations: ['patient', 'doctor', 'createdBy'],
     });
+    if (!appointment) throw new NotFoundException('Appointment not found');
+    return appointment;
   }
 
   /**
-   * Update appointment status (Admin only)
-   * @param id appointment id
-   * @param status the new status
-   * @returns updated appointment
+   * Update appointment status with role-based transition rules
+   * pending   → confirmed : Receptionist | Admin
+   * confirmed → completed : Doctor | Receptionist
+   * any       → cancelled : All roles
    */
-  public async updateStatus(id: number, status: AppointmentStatus) {
-    const appointment = await this.getAppointmentBy(id);
-    // لو الادمن بيلغي الموعد، حرّر الـ slot عشان حد تاني يقدر يحجزه
-    if (status === AppointmentStatus.CANCELLED) {
-      const doctor = appointment.doctor;
-      if (doctor.slots_booked?.[appointment.slotDate]) {
-        doctor.slots_booked[appointment.slotDate] = doctor.slots_booked[appointment.slotDate]
-          .filter((t) => t !== appointment.slotTime);
+  public async updateStatus(id: number, dto: UpdateAppointmentStatusDto, payload: JWTPayloadType) {
+    const appointment = await this.getAppointmentById(id);
+    const { status } = dto;
 
-        if (doctor.slots_booked[appointment.slotDate].length === 0) {
-          delete doctor.slots_booked[appointment.slotDate];
-        }
-        await this.doctorRepository.save(doctor);
+    // المواعيد المكتملة لا تتعدل
+    if (appointment.status === AppointmentStatus.COMPLETED) {
+      throw new BadRequestException('Completed appointments cannot be modified');
+    }
+
+    // قواعد الانتقال
+    if (status === AppointmentStatus.CONFIRMED) {
+      if (![UserType.ADMIN, UserType.RECEPTIONIST].includes(payload.userType)) {
+        throw new ForbiddenException('Only Admin or Receptionist can confirm appointments');
+      }
+    }
+
+    if (status === AppointmentStatus.COMPLETED) {
+      if (![UserType.ADMIN, UserType.DOCTOR, UserType.RECEPTIONIST].includes(payload.userType)) {
+        throw new ForbiddenException('Only Doctor or Receptionist can complete appointments');
+      }
+      if (appointment.status !== AppointmentStatus.CONFIRMED) {
+        throw new BadRequestException('Only confirmed appointments can be marked as completed');
       }
     }
 
     appointment.status = status;
-    return this.appointmentRepository.save(appointment);
+    return this.appointmentRepo.save(appointment);
   }
 
   /**
-   * Delete appointment by id
-   * @param id id for the Appointment
-   * @param payload JWTPayload
-   * @returns success message
+   * Reschedule a cancelled appointment → creates new pending appointment
+   * (Receptionist & Admin only)
    */
-  public async deleteAppointment(id: number, payload: JWTPayloadType) {
-    const appointment = await this.getAppointmentBy(id);
+  public async rescheduleAppointment(id: number, dto: RescheduleAppointmentDto, payload: JWTPayloadType) {
+    const old = await this.getAppointmentById(id);
 
-    if (appointment.user.id !== payload.id && payload.userType !== UserType.ADMIN) {
-      throw new ForbiddenException('Access denied, you are not allowed');
+    if (old.status !== AppointmentStatus.CANCELLED) {
+      throw new BadRequestException('Only cancelled appointments can be rescheduled');
     }
 
-    // تنظيف slots_booked من الدكتور عند الحذف
-    const doctor = appointment.doctor;
-    if (doctor.slots_booked?.[appointment.slotDate]) {
-      doctor.slots_booked[appointment.slotDate] = doctor.slots_booked[appointment.slotDate]
-        .filter((t) => t !== appointment.slotTime);
-
-      if (doctor.slots_booked[appointment.slotDate].length === 0) {
-        delete doctor.slots_booked[appointment.slotDate];
-      }
-      await this.doctorRepository.save(doctor);
+    // التاريخ الجديد في المستقبل
+    if (new Date(`${dto.slotDate}T${dto.slotTime}:00`) <= new Date()) {
+      throw new BadRequestException('New appointment date and time must be in the future');
     }
 
-    await this.appointmentRepository.remove(appointment);
-    return { message: 'Appointment has been deleted successfully' };
-  }
+    // منع Double Booking في الـ slot الجديد
+    const conflict = await this.appointmentRepo.findOne({
+      where: [
+        { doctor: { id: old.doctor.id }, slotDate: dto.slotDate, slotTime: dto.slotTime, status: AppointmentStatus.PENDING },
+        { doctor: { id: old.doctor.id }, slotDate: dto.slotDate, slotTime: dto.slotTime, status: AppointmentStatus.CONFIRMED },
+      ],
+    });
+    if (conflict) {
+      throw new BadRequestException(`Slot ${dto.slotTime} on ${dto.slotDate} is already booked`);
+    }
 
-  /**
-   * Get single Appointment by id
-   * @param id id for the Appointment
-   * @returns Appointment from the database
-   */
-  public async getAppointmentBy(id: number) {
-    const appointment = await this.appointmentRepository.findOne({
-      where: { id },
-      relations: {
-        user: true,
-        doctor: true,
-      },
+    const createdBy = await this.userRepo.findOne({ where: { id: payload.id } });
+
+    const newAppointment = this.appointmentRepo.create({
+      patient: old.patient,
+      doctor: old.doctor,
+      slotDate: dto.slotDate,
+      slotTime: dto.slotTime,
+      status: AppointmentStatus.PENDING,
+      createdBy,
     });
 
-    if (!appointment) {
-      throw new NotFoundException('Appointment not found');
-    }
+    return this.appointmentRepo.save(newAppointment);
+  }
 
-    return appointment;
+  /**
+   * Delete appointment (Admin only)
+   */
+  public async deleteAppointment(id: number) {
+    const appointment = await this.getAppointmentById(id);
+    await this.appointmentRepo.remove(appointment);
+    return { message: 'Appointment deleted successfully' };
   }
 }

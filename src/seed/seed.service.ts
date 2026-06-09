@@ -40,7 +40,7 @@ export class SeedService implements OnModuleInit {
             email: 'admin@clinic.com',
             phone: '01145719730',
             password: hashedPassword,
-            role: UserType.ADMIN,
+            userType: UserType.ADMIN,
             status: UserStatus.ACTIVE,
         });
 

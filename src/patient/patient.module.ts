@@ -9,10 +9,11 @@ import { Users } from 'src/users/users.entity';
 import { AuthRolesGuard } from 'src/Auth/guards/auth.roles.guard';
 import { UsersService } from 'src/users/users.service';
 import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
+import { Appointment } from 'src/appointment/appointment.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Patient, Users]),
+    TypeOrmModule.forFeature([Patient, Users , Appointment]),
     JwtModule.register({}),
     ConfigModule,
     CloudinaryModule,

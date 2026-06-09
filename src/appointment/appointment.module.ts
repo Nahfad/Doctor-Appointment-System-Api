@@ -7,13 +7,13 @@ import { AppointmentService } from './appointment.service';
 import { AppointmentController } from './appointment.controller';
 import { AuthRolesGuard } from '../Auth/guards/auth.roles.guard';
 import { Users } from '../users/users.entity';
-import { Doctor } from 'src/doctors/doctors.entity';
 import { UsersService } from 'src/users/users.service';
 import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
+import { Patient } from 'src/patient/patient.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Appointment, Users, Doctor]),
+    TypeOrmModule.forFeature([Appointment, Users, Patient]),
     JwtModule.register({}),
     ConfigModule, CloudinaryModule
   ],

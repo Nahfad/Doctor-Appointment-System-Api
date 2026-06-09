@@ -1,25 +1,55 @@
-import { IsEmail, IsEnum, IsString, Length, Matches } from 'class-validator';
-import { UserType } from 'src/utils/enums';
+import {
+    IsEmail, IsEnum, IsInt, IsOptional,
+    IsString, Length, Matches, Min, Max,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { UserType, DoctorSpeciality } from 'src/utils/enums';
 
 export class CreateStaffDto {
 
     @IsString()
-    @Length(2, 100)
+    @Length(3, 100)
     name: string;
 
     @IsEmail()
     email: string;
 
-    // Password: minimum 8 chars, at least 1 uppercase, 1 number
     @IsString()
     @Matches(/^(?=.*[A-Z])(?=.*\d).{8,}$/, {
         message: 'password must be at least 8 characters with 1 uppercase and 1 number',
     })
     password: string;
 
-    // الادمن بيختار هل بيعمل حساب دكتور ولا ريسبشن
+    @IsString()
+    @Matches(/^(\+20|0)?1[0125]\d{8}$/, {
+        message: 'phone must be a valid Egyptian phone number',
+    })
+    phone: string;
+
     @IsEnum([UserType.DOCTOR, UserType.RECEPTIONIST], {
-        message: 'userType must be either doctor or receptionist',
+        message: 'userType must be doctor or receptionist',
     })
     userType: UserType.DOCTOR | UserType.RECEPTIONIST;
+
+    // Doctor only — إلزامية لو userType = doctor
+    @IsOptional()
+    @IsEnum(DoctorSpeciality)
+    speciality?: DoctorSpeciality;
+
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    @Max(60)
+    @Type(() => Number)
+    experienceYears?: number;
+
+    @IsOptional()
+    @Type(() => Number)
+    @Min(0)
+    fees?: number;
+
+    @IsOptional()
+    @IsString()
+    @Length(0, 500)
+    about?: string;
 }
