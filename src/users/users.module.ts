@@ -10,7 +10,7 @@ import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Users] , ),
+    TypeOrmModule.forFeature([Users],),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
