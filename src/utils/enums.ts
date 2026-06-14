@@ -2,7 +2,6 @@ export enum UserType {
     ADMIN = 'admin',
     RECEPTIONIST = 'receptionist',
     DOCTOR = 'doctor',
-    User = 'user',
 }
 
 export enum AppointmentStatus {

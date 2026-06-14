@@ -6,6 +6,7 @@ import {
 import { Gender } from 'src/utils/enums';
 import { CURRENT_TIMESTAMP } from 'src/utils/constants';
 import { Appointment } from 'src/appointment/appointment.entity';
+import { Visit } from 'src/visit/visit.entity';
 
 @Entity('patients')
 export class Patient {
@@ -45,9 +46,6 @@ export class Patient {
     @OneToMany(() => Appointment, (appointment) => appointment.patient)
     appointments: Appointment[];
 
-    // @OneToMany(
-    //     () => Visit,
-    //     (visit) => visit.patient,
-    // )
-    // visits: Visit[];
+    @OneToMany(() => Visit, (visit) => visit.patient)
+    visits: Visit[];
 }
